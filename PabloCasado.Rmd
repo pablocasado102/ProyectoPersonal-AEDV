@@ -129,36 +129,6 @@ El atributo width controla el tamaño relativo respecto al ancho del documento.
 
 
 
-Para formatear el texto se usa el fichero *estilos.css* que está incluido en las instrucciones de la cabecera de este documento. En el fichero *estilos.css* se incorporan algunas herramientas útiles para destacar bloques de texto como por ejemplo: 
-
-<!-- 
-NOTA: EJEMPLOS DE FORMATEO OCULTOS 
-(Se han puesto entre comentarios para que no ensucien el documento final, tal y como pide la plantilla)
-
-<div class="nota">
-<strong class="bloque-titulo">MiTítulo bloque nota</strong>
-Se usa para resaltar un comentario
-</div>
-
-<div class="metodo">
-<strong class="bloque-titulo">MiTítulo bloque metodo</strong>
-Se usa para resaltar métodos/algoritmos/fórmulas 
-</div>
-
-<div class="discusion">
-<strong class="bloque-titulo">MiTítulo bloque de discusion </strong>
-Se usa para resaltar una discusión/comparación/resultados previos
-</div>
-
-<div class="resultado">
-<strong class="bloque-titulo">MiTítulo bloque resultado</strong>
-Se usa para resaltar resultados de nuestro proyecto
-</div>
--->
-
-<!--NOTA: BORRAR O PONER ENTRE COMENTARIOS ESTOS EJEMPLOS DE FORMATEO UNA VEZ ENTENDIDOS LOS EJEMPLO -->
-
-
 # Introducción
 
 ## Estado actual
@@ -197,9 +167,9 @@ Para guiar el análisis, se plantean **cinco preguntas de investigación concret
 En esta segunda entrega del proyecto se han alcanzado los siguientes resultados principales:
 
 1. **Comprensión y depuración de un dataset multidimensional:** Se ha estructurado el dataset `avia_paoc` de Eurostat, identificando y resolviendo el riesgo de doble conteo mediante el filtrado explícito de dimensiones fijas (`freq`, `unit`, `tra_meas`, `tra_cov`, `schedule`).
-2. **Identificación de la concentración europea y liderazgo de España:** Mediante el análisis de Pareto se comprueba que 5 países concentran casi el 60 % de los pasajeros de Europa en 2023, y que España lidera el ranking con 236.5 millones de pasajeros (un 15.0 % del total).
+2. **Identificación de la concentración europea y liderazgo de España:** Mediante el análisis de Pareto se comprueba que 5 países concentran el 58.1 % de los pasajeros de Europa en 2023, liderando España el volumen con 236.5 millones de pasajeros (un 15.0 % del total). Al incorporar el dataset de población para calcular indicadores per cápita, España registra 4.92 pasajeros anuales por habitante, más del doble que grandes potencias comunitarias como Alemania (2.23) o Francia (2.35).
 3. **Evidencia de la recuperación asimétrica post-COVID:** La normalización en Base 100 muestra que los países turísticos del sur (España, Portugal, Grecia) superaron el nivel pre-pandemia en 2022 y marcaron máximos históricos en 2023-2024, mientras que Alemania y Francia siguen por debajo de sus cifras de 2019.
-4. **Modelado y diagnóstico de series temporales:** La descomposición STL aísla la marcada estacionalidad estival española (+14 millones en Q3). El modelo $\text{ARIMA}(2,0,0)(2,1,0)[4]$ ajustado supera con éxito los contrastes de media cero ($p = 0.524$), incorrelación ($p = 0.904$) y varianza constante ($p = 0.169$). Alcanza un ajuste notable con un $\text{MASE} = 0.390 < 1$, batiendo al método trivial estacional, y proyecta picos estivales por encima de 80 millones de pasajeros en 2025 y 2026 de forma coherente con la predicción combinada STL+ARIMA.
+4. **Modelado y diagnóstico de series temporales:** Tras tratar el periodo anómalo de la pandemia mediante interpolación (Sección 5.14 del libro), la descomposición STL aísla la marcada estacionalidad estival (+14 millones en Q3). El modelo $\text{ARIMA}(1,0,3)(0,1,0)[4]$ supera con éxito los cuatro contrastes de ruido blanco: media cero ($p = 0.278$), incorrelación ($p = 0.830$), normalidad ($p = 0.721$) y varianza constante ($p = 0.528$). Alcanza un ajuste excelente ($\text{MASE} = 0.359 \ll 1$, $\text{RMSE} = 1.70\text{ M}$), batiendo en un 64 % al método trivial estacional, y proyecta picos estivales que superarán los 83-85 millones de pasajeros en 2025 y 2026 de forma coherente con la predicción combinada STL+ARIMA.
 
 ## Alineamiento con los objetivos de desarrollo sostenible
 
@@ -298,77 +268,112 @@ Como confirma la tabla de validación generada automáticamente, el dataset cump
 
 ## Preparación de los datos
 
-### Prevención del error de doble conteo y construcción de la serie trimestral
+### Definición de atributos combinados y normalización per cápita
 
-En las tablas de Eurostat conviven registros desagregados con subtotales dentro de las mismas columnas. Si calculáramos un `sum(values)` directamente sobre la tabla sin filtrar, sumaríamos los vuelos nacionales más los internacionales junto con el total general, o los pasajeros regulares más los chárter con su suma, multiplicando artificialmente las cifras reales por 6 o más.
+La tabla multidimensional `avia_paoc` cruza múltiples categorías en sus dimensiones (`unit`, `tra_cov`, `tra_meas`, `schedule`). Para evitar el doble conteo de registros y centrar el estudio en magnitudes comparables y no redundantes, definimos al inicio de esta fase **cuatro atributos combinados clave**:
 
-Para evitar este error de doble conteo, fijamos una única categoría en cada dimensión:
-* `freq == "Q"` (frecuencia trimestral).
-* `unit == "PAS"` (pasajeros).
-* `tra_meas == "PAS_BRD"` (pasajeros a bordo).
-* `tra_cov == "TOTAL"` (tráfico total, sumando nacional e internacional).
-* `schedule == "TOTAL"` (total general, sumando regular y no regular).
-* Exclusión de agregados supranacionales (`EU27_2020`, `EA20`, etc.), dejando exclusivamente países individuales.
+1. **Pasajeros totales per cápita** (`unit == "PAS"`, `tra_meas == "PAS_BRD"`, `tra_cov == "TOTAL"`): volumen global de viajeros por habitante.
+2. **Pasajeros internacionales per cápita** (`unit == "PAS"`, `tra_meas == "PAS_BRD"`, `tra_cov == "INTL"`): intensidad de la conectividad exterior y del turismo receptor.
+3. **Pasajeros nacionales per cápita** (`unit == "PAS"`, `tra_meas == "PAS_BRD"`, `tra_cov == "NAT"`): movilidad interior y vertebración territorial e interinsular.
+4. **Vuelos comerciales por cada 1.000 habitantes** (`unit == "FLIGHT"`, `tra_meas == "CAF_PAS"`, `tra_cov == "TOTAL"`): intensidad operativa de las aerolíneas en el territorio.
 
-**Construcción de las fechas trimestrales:** En los ficheros descargados de Eurostat, las observaciones trimestrales aparecen asociadas a la fecha anual `YYYY-01-01`. Hemos comprobado que dentro de cada año y para cada país aparecen exactamente cuatro registros consecutivos correspondientes a los cuatro trimestres (Q1, Q2, Q3 y Q4), sin duplicados ni periodos incompletos en el rango 2005-2024 (655 combinaciones país-año verificadas). Para trabajar con series temporales regulares, ordenamos explícitamente las observaciones y reconstruimos el objeto de fecha trimestral (`yearquarter`):
+Además, como comparar cifras en volumen absoluto entre países de dimensiones muy dispares (como España frente a la media comunitaria o países de menor escala) distorsiona el análisis, incorporamos el dataset oficial de población de Eurostat (`demo_pjan`, población total a 1 de enero). De este modo normalizamos los indicadores dividiendo por el censo de cada territorio y año, garantizando comparativas homogéneas.
+
+**Construcción de las fechas trimestrales y cálculo de indicadores:**
+Ordenamos cronológicamente las observaciones dentro de cada año para asociar a cada registro su trimestre exacto (`Q1` a `Q4`), unimos los registros demográficos y calculamos las variables per cápita:
 
 ```{r preparacion-filtrado}
-vuelos_trim <- vuelos |>
+# 1. Dataset de población de Eurostat (demo_pjan) cargado localmente con respaldo
+if (file.exists("poblacion_eurostat.rds")) {
+  pob_raw <- readRDS("poblacion_eurostat.rds")
+} else {
+  pob_raw <- eurostat::get_eurostat("demo_pjan", time_format = "num")
+}
+
+pob <- pob_raw |>
+  filter(sex == "T", age == "TOTAL") |>
+  mutate(year = if ("time" %in% names(pob_raw)) year(time) else as.numeric(TIME_PERIOD)) |>
+  select(geo, year, poblacion = values)
+
+# 2. Definición y normalización de los 4 atributos combinados
+vuelos_comb <- vuelos |>
   filter(
     freq == "Q",
-    unit == "PAS",
-    tra_meas == "PAS_BRD",
-    tra_cov == "TOTAL",
-    schedule == "TOTAL"
+    schedule == "TOTAL",
+    (unit == "PAS" & tra_meas == "PAS_BRD" & tra_cov %in% c("TOTAL", "INTL", "NAT")) |
+    (unit == "FLIGHT" & tra_meas == "CAF_PAS" & tra_cov == "TOTAL")
   ) |>
-  filter(!grepl("^(EU|EA|EF|CC|OE|G2|G7)", geo)) |>
-  arrange(geo, TIME_PERIOD) |>
-  group_by(geo, year = year(TIME_PERIOD)) |>
+  mutate(
+    atributo = case_when(
+      unit == "PAS" & tra_cov == "TOTAL" ~ "Pasajeros totales (por hab.)",
+      unit == "PAS" & tra_cov == "INTL"  ~ "Pasajeros internacionales (por hab.)",
+      unit == "PAS" & tra_cov == "NAT"   ~ "Pasajeros nacionales (por hab.)",
+      unit == "FLIGHT" & tra_cov == "TOTAL" ~ "Vuelos comerciales (por 1.000 hab.)"
+    )
+  ) |>
+  arrange(geo, atributo, TIME_PERIOD) |>
+  group_by(geo, atributo, year = year(TIME_PERIOD)) |>
   mutate(trimestre_num = row_number()) |>
   ungroup() |>
   mutate(fecha_trim = yearquarter(paste0(year, " Q", trimestre_num))) |>
-  arrange(geo, fecha_trim)
+  left_join(pob, by = c("geo", "year")) |>
+  mutate(
+    valor_pc = if_else(
+      unit == "FLIGHT",
+      (values / poblacion) * 1000,
+      values / poblacion
+    )
+  )
 
-# Agregamos también por país y año para análisis anuales
+# 3. Series de pasajeros para agregaciones y análisis por países individuales
+vuelos_trim <- vuelos_comb |>
+  filter(atributo == "Pasajeros totales (por hab.)", !grepl("^(EU|EA|EF|CC|OE|G2|G7)", geo))
+
 vuelos_anual <- vuelos_trim |>
   group_by(geo, year) |>
-  summarise(total_pasajeros = sum(values, na.rm = TRUE), .groups = "drop")
+  summarise(
+    total_pasajeros = sum(values, na.rm = TRUE),
+    pasajeros_pc = sum(values, na.rm = TRUE) / first(poblacion),
+    .groups = "drop"
+  )
 ```
 
-### Visión general: Evolución temporal de las series originales
+### Evolución de los indicadores per cápita: España frente a la UE-27
 
-Tal y como se establece en los criterios de la asignatura, antes de presentar cualquier análisis de detalle o cálculo derivado, mostramos una visión general del fenómeno mediante la evolución temporal de las series originales del indicador principal (pasajeros trimestrales) en varios países europeos de referencia, utilizando `facet_wrap`:
+Para obtener una visión general estructurada del fenómeno, comparamos la evolución temporal de España con el agregado de la Unión Europea (UE-27) en cada uno de los cuatro atributos combinados per cápita a lo largo del periodo 2005-2024:
 
-```{r series-originales-multipanel, fig.cap="Figura 2. Evolución trimestral de pasajeros en los principales mercados aéreos europeos (2005-2024)."}
-paises_referencia <- c("ES", "DE", "FR", "IT", "PT", "EL")
-nombres_referencia <- c(
-  "ES" = "España", "DE" = "Alemania", "FR" = "Francia",
-  "IT" = "Italia", "PT" = "Portugal", "EL" = "Grecia"
-)
+```{r series-originales-multipanel, fig.cap="Figura 2. Comparativa per cápita del transporte aéreo entre España y la UE-27 (2005-2024)."}
+tb_es_eu <- vuelos_comb |>
+  filter(geo %in% c("ES", "EU27_2020"), year >= 2005, year <= 2024, !is.na(valor_pc)) |>
+  mutate(region = if_else(geo == "ES", "España", "UE-27"))
 
-tb_series_orig <- vuelos_trim |>
-  filter(geo %in% paises_referencia, year >= 2005, year <= 2024) |>
-  mutate(pais_nombre = factor(nombres_referencia[geo], levels = nombres_referencia))
-
-ggplot(tb_series_orig, aes(x = as.Date(fecha_trim), y = values / 1e6, color = pais_nombre)) +
-  geom_line(linewidth = 0.8, show.legend = FALSE) +
-  facet_wrap(~ pais_nombre, scales = "free_y", ncol = 3) +
+ggplot(tb_es_eu, aes(x = as.Date(fecha_trim), y = valor_pc, color = region)) +
+  geom_line(linewidth = 0.85) +
+  facet_wrap(~ atributo, scales = "free_y", ncol = 2) +
+  scale_color_manual(values = c("España" = "#D9534F", "UE-27" = "#2B5C8F")) +
   scale_x_date(date_breaks = "4 years", date_labels = "%Y") +
-  scale_y_continuous(labels = scales::comma_format(suffix = " M")) +
   labs(
-    title = "Evolución del tráfico aéreo trimestral de pasajeros (2005-2024)",
-    subtitle = "Series temporales en escala original con eje vertical adaptado (free_y)",
+    title = "Evolución per cápita del transporte aéreo: España frente a la UE-27 (2005-2024)",
+    subtitle = "Cuatro dimensiones comparadas: tráfico total, internacional, nacional y operaciones por habitante",
     x = "Año",
-    y = "Pasajeros por trimestre (Millones)",
-    caption = "Fuente: Eurostat (avia_paoc)"
+    y = "Valor normalizado per cápita",
+    color = "Territorio",
+    caption = "Fuente: Eurostat (avia_paoc y demo_pjan)"
   ) +
   theme_bw(base_size = 11) +
-  theme(plot.title = element_text(face = "bold"))
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "bottom"
+  )
 ```
 
-**Comentario:** La visualización de las series originales permite observar patrones compartidos y diferencias cuantitativas notables. En todos los mercados se aprecia una tendencia general de crecimiento hasta 2019, la caída histórica en 2020 por las restricciones sanitarias y una marcada estacionalidad con picos cada verano. No obstante, la escala difiere sustancialmente: España supera los 65 millones de pasajeros en sus trimestres punta y Alemania los 50 millones, mientras que mercados como Portugal o Grecia operan entre 15 y 27 millones estivales. Por ello, el uso de `scales = "free_y"` resulta necesario para no aplanar la dinámica propia de los países de menor volumen.
+**Comentario:** El panel comparativo per cápita aporta conclusiones reveladoras sobre la posición estratégica de España respecto a la media comunitaria:
+1. **Pasajeros totales per cápita:** España supera de forma sistemática a la UE-27 durante todo el horizonte temporal, alcanzando en los trimestres estivales ratios de hasta 1.4 pasajeros por habitante frente a los 0.6 de la media europea.
+2. **Pasajeros internacionales per cápita:** Refleja la enorme intensidad de la demanda turística externa hacia España, duplicando holgadamente los registros comunitarios medios.
+3. **Pasajeros nacionales per cápita:** Este atributo evidencia una brecha estructural todavía más acusada: en España el tráfico aéreo interior tiene un peso per cápita muy superior al europeo debido a la discontinuidad geográfica peninsular y la necesidad imprescindible de transporte aéreo hacia los archipiélagos canario y balear.
+4. **Vuelos comerciales por cada 1.000 habitantes:** La operativa de aeronaves sigue una pauta gemela a la del pasaje, con España manteniendo una densidad de vuelos comerciales significativamente superior a la media de la Unión Europea. Ambos territorios acusan el colapso abrupto de 2020 y una enérgica recuperación posterior que alcanza máximos históricos en 2024.
 
-### Concentración del tráfico: Análisis de Pareto (Barras y Sectores)
+### Concentración del tráfico aéreo en Europa
 
 > **Pregunta P2:** ¿Qué proporción del tráfico aéreo europeo concentran los principales países y qué porcentaje del pasaje continental corresponde a España en 2023?
 
@@ -426,7 +431,7 @@ g_pie
 
 **Comentario:** Los gráficos confirman una marcada concentración espacial del transporte aéreo europeo: únicamente 5 países —España (15.0 %), Alemania (11.8 %), Turquía (10.7 %), Italia (10.4 %) y Francia (10.2 %)— concentran el 58.1 % de todos los pasajeros de Europa en 2023. España encabeza el ranking continental con 236.5 millones de pasajeros anuales, superando a mercados más poblados debido a su condición de potencia turística y a la necesidad de conectividad de sus archipiélagos (Canarias y Baleares).
 
-### Impacto de la COVID-19 y recuperación: Caída interanual e índice Base 100
+### Impacto de la pandemia y ritmo de recuperación por países
 
 > **Pregunta P1:** ¿En qué porcentaje cayó el número de pasajeros en el segundo trimestre de 2020 frente al mismo trimestre de 2019 y qué diferencias se observan en la velocidad de recuperación relativa (Base 100) entre países?
 
@@ -486,11 +491,11 @@ ggplot(tb_indice, aes(x = as.Date(fecha_trim), y = indice, color = pais_nombre))
 1. **Caída interanual:** En el segundo trimestre de 2020 el tráfico colapsó de manera casi total en todos los países respecto a 2019 Q2: España sufrió una caída del 98.5 % (pasando de 62.95 M a apenas 926 mil pasajeros), Italia del 97.8 %, Portugal del 97.5 %, Francia del 97.2 %, Grecia del 96.8 % y Alemania del 96.7 %.
 2. **Trayectoria de recuperación:** El gráfico Base 100 muestra ritmos de salida muy dispares. Los destinos del sur (España, Portugal y Grecia) superaron el nivel 100 ya en 2022 y alcanzaron picos entre el 120 % y el 140 % en 2023-2024. Por contra, Alemania y Francia se han mantenido más lentas en su recuperación, situándose en torno al 90-95 % de su nivel base. Aunque los datos de tráfico no permiten identificar directamente las causas de estas diferencias, reflejan pautas de demanda muy distintas entre regiones.
 
-### Estacionalidad trimestral: Mapa de calor (HeatMap)
+### Estacionalidad trimestral en los principales mercados
 
 > **Pregunta analítica:** ¿Cómo varía la intensidad del tráfico aéreo a lo largo de los cuatro trimestres del año entre los principales países de Europa?
 
-Siguiendo la técnica del Capítulo 4 del libro (Sección 4.16), construimos un mapa de calor con `geom_tile()` promediando los pasajeros trimestrales del periodo reciente (2021-2024) para los 8 países de mayor tráfico:
+Para comparar la estacionalidad entre los principales mercados, analizamos el promedio trimestral de pasajeros entre 2021 y 2024 mediante un mapa de calor:
 
 ```{r heatmap-estacionalidad, fig.cap="Figura 5. Mapa de calor de la intensidad estacional media (millones de pasajeros) entre 2021 y 2024."}
 top_8 <- c("ES", "DE", "FR", "IT", "PT", "EL", "NL", "PL")
@@ -528,7 +533,7 @@ ggplot(hm_data, aes(x = trimestre, y = pais_nombre, fill = media_pasajeros)) +
 
 **Comentario:** El mapa de calor ilustra que el tercer trimestre (T3, julio a septiembre) concentra los máximos anuales en todos los países, pero con intensidades variables. En España, la media trimestral pasa de 32.6 millones en invierno (T1) a 64.7 millones en verano (T3). En Grecia el perfil es todavía más extremo, multiplicándose casi por siete entre el invierno (4.0 M) y el verano (27.1 M). En cambio, en países como Alemania los tonos son más uniformes (de 23.7 M en T1 a 50.4 M en T3).
 
-### Distribución anual: Diagrama de cajas (Boxplot) y dispersión
+### Distribución continental y posición relativa de España
 
 > **Pregunta P3:** ¿Cómo se distribuye el número anual de pasajeros entre todos los países europeos y en qué posición de la distribución se sitúa España?
 
@@ -543,11 +548,10 @@ ggplot(tb_box, aes(x = year_factor, y = total_pasajeros / 1e6)) +
   geom_boxplot(outlier.shape = NA, fill = "#F8F9FA", color = "#495057") +
   geom_jitter(shape = 16, position = position_jitter(0.2), color = "grey50", alpha = 0.6) +
   geom_point(data = tb_box |> filter(geo == "ES"), color = "red", size = 3.5) +
-  annotate("text", x = "2023", y = 250, label = "España (líder)", color = "red", fontface = "bold", size = 3.8) +
   scale_y_continuous(labels = scales::comma_format(suffix = " M")) +
   labs(
     title = "Distribución anual de pasajeros aéreos en Europa (2018-2024)",
-    subtitle = "Cada punto gris es un país; el punto rojo resalta la posición de España",
+    subtitle = "Cada punto gris representa a un país; el punto rojo resalta la posición de España",
     x = "Año",
     y = "Pasajeros anuales (Millones)",
     caption = "Fuente: Eurostat (avia_paoc)"
@@ -560,9 +564,9 @@ ggplot(tb_box, aes(x = year_factor, y = total_pasajeros / 1e6)) +
 
 ## Modelado
 
-### Estructura tsibble y examen estacional con gg_season
+### Patrón estacional del tráfico aéreo en España
 
-Para modelar la serie temporal con las herramientas del curso (`fpp3`), preparamos la serie trimestral de pasajeros de España desde 2005 hasta 2024 y la convertimos en un objeto `tsibble` con índice `fecha`. Comprobamos con `has_gaps()` que no existan fechas ausentes y examinamos los perfiles anuales mediante `gg_season()` (técnica del Capítulo 5 del libro):
+Para modelar la serie temporal con las herramientas del curso (`fpp3`), preparamos la serie trimestral de pasajeros de España desde 2005 hasta 2024 y la convertimos en un objeto `tsibble` con índice `fecha`. Comprobamos con `has_gaps()` que no existan fechas ausentes y examinamos los perfiles anuales mediante `gg_season()`:
 
 ```{r tsibble-creacion, fig.cap="Figura 7. Gráfico estacional de pasajeros en España (2005-2024) con gg_season."}
 ts_espana <- vuelos_trim |>
@@ -587,16 +591,31 @@ gg_season(ts_espana, pasajeros, period = "year") +
   theme(plot.title = element_text(face = "bold"))
 ```
 
-**Comentario:** El gráfico `gg_season()` evidencia la notable regularidad del patrón turístico: salvo el atípico año 2020, todas las curvas anuales comparten la misma forma, con un ascenso continuado desde el invierno (T1) hasta el pico de verano (T3) y un posterior descenso en otoño (T4).
+**Comentario:** El gráfico `gg_season()` evidencia la notable regularidad del patrón turístico: salvo el anómalo año 2020, todas las curvas anuales comparten la misma forma, con un ascenso continuado desde el invierno (T1) hasta el pico de verano (T3) y un posterior descenso en otoño (T4).
 
-### Descomposición STL
+**Tratamiento del periodo COVID-19 para el modelado:**
+Tal y como se establece en la asignatura para series temporales con shocks externos extremos (Sección 5.14 del libro), si no se corrigen los trimestres del confinamiento la distorsión rompe los modelos y arruina los supuestos de los residuos. Por ello, extraemos los ocho trimestres afectados por la pandemia (2020 Q1 a 2021 Q4) generando los huecos con `fill_gaps()` y reconstruimos la trayectoria regular de la serie mediante interpolación con un modelo ARIMA:
+
+```{r tratamiento-covid}
+# 1. Creamos los huecos en el tramo de la pandemia (2020 Q1 - 2021 Q4)
+ts_espana_sin_covid <- ts_espana |>
+  filter(fecha < yearquarter("2020 Q1") | fecha > yearquarter("2021 Q4")) |>
+  fill_gaps()
+
+# 2. Rellenamos los huecos mediante interpolación ARIMA
+ts_espana_limpia <- ts_espana_sin_covid |>
+  model(ARIMA(pasajeros)) |>
+  interpolate(ts_espana_sin_covid)
+```
+
+### Análisis de la tendencia y ciclo estacional
 
 > **Pregunta P4:** ¿Cómo varía el tráfico de pasajeros en España a lo largo de los cuatro trimestres del año y cómo se comporta su tendencia tras aislar la componente estacional con el método STL robusto?
 
-Aplicamos el método **STL** (*Seasonal and Trend decomposition using Loess*) para separar la serie en tendencia ($L_t$), estacionalidad ($S_t$, periodo 4) y resto o *remainder* ($R_t$). Usamos la opción `robust = TRUE` para que el shock de 2020 no distorsione el cálculo del patrón estacional regular:
+Aplicamos el método **STL** (*Seasonal and Trend decomposition using Loess*) sobre la serie corregida para separar la tendencia ($L_t$), la estacionalidad ($S_t$, periodo 4) y el resto o *remainder* ($R_t$), empleando la opción `robust = TRUE`:
 
 ```{r stl-descomposicion, fig.cap="Figura 8. Descomposición STL robusta y evolución temporal de su remainder en España (2005-2024)."}
-fit_stl <- ts_espana |>
+fit_stl <- ts_espana_limpia |>
   model(stl = STL(pasajeros ~ season(period = 4), robust = TRUE))
 
 comp_stl <- components(fit_stl)
@@ -627,15 +646,15 @@ comp_stl |>
   theme(plot.title = element_text(face = "bold"))
 ```
 
-**Comentario:** La descomposición aísla con nitidez el ciclo estacional español: en verano (T3) la serie suma sistemáticamente entre 12 y 16 millones de pasajeros por encima de la tendencia, mientras que en invierno (T1) resta unos 10 millones. La tendencia Loess muestra la fuerte caída de 2020 y la posterior recuperación en "V", superando en 2023 los máximos históricos previos. En el gráfico del *remainder*, los residuos oscilan alrededor de cero salvo por el brusco impacto negativo de los trimestres del confinamiento de 2020. El diagnóstico formal de sus propiedades se evalúa en la sección **3.7**.
+**Comentario:** La descomposición aísla con nitidez el ciclo estacional español: en verano (T3) la serie suma sistemáticamente entre 12 y 16 millones de pasajeros por encima de la tendencia, mientras que en invierno (T1) resta unos 10 millones. La tendencia Loess muestra un crecimiento sólido y sostenido que se recupera con fuerza tras la pandemia, superando en 2023 y 2024 los máximos históricos anteriores. En el gráfico del *remainder*, los residuos oscilan de forma estable alrededor del cero.
 
-### Ajuste e interpretación del modelo ARIMA estacional
+### Modelado predictivo con ARIMA estacional
 
-Ajustamos un modelo ARIMA estacional mediante la función facilitada `aedv_prediccion_arima()`, proyectando a 8 trimestres vista ($h = 8$, dos años completos), e inspeccionamos la estructura del modelo y sus coeficientes con `aedv_modelo()`:
+Ajustamos un modelo ARIMA estacional sobre la serie corregida mediante la función de la asignatura `aedv_prediccion_arima()`, proyectando a 8 trimestres vista ($h = 8$, dos años completos), e inspeccionamos la estructura del modelo y sus coeficientes con `aedv_modelo()`:
 
 ```{r arima-ajuste}
 # Estimación del modelo ARIMA y predicción a 8 trimestres
-res_pred_arima <- aedv_prediccion_arima(ts_espana, h = 8)
+res_pred_arima <- aedv_prediccion_arima(ts_espana_limpia, h = 8)
 
 # Parámetros y coeficientes estimados
 mod_info <- aedv_modelo(res_pred_arima)
@@ -650,17 +669,17 @@ mod_info$coeficientes |>
   fmt_scientific(columns = `p-valor`, decimals = 2)
 ```
 
-El algoritmo selecciona automáticamente un modelo $\text{ARIMA}(2,0,0)(2,1,0)[4]$:
-* Parte regular: orden autorregresivo $p = 2$, sin diferenciación ($d = 0$) y sin media móvil ($q = 0$). Los coeficientes son $\phi_1 = 1.110$ y $\phi_2 = -0.342$, ambos estadísticamente significativos ($p < 0.01$).
-* Parte estacional: periodo $m = 4$ trimestres, orden autorregresivo estacional $P = 2$, una diferenciación estacional $D = 1$ ($(1 - B^4)$) y sin media móvil estacional ($Q = 0$). Los coeficientes son $\Phi_1 = -0.279$ y $\Phi_2 = -0.323$ ($p < 0.05$).
+El algoritmo selecciona automáticamente un modelo $\text{ARIMA}(1,0,3)(0,1,0)[4]$:
+* Parte regular: orden autorregresivo $p = 1$, sin diferenciación ordinaria ($d = 0$) y orden de media móvil $q = 3$. Los coeficientes son $\phi_1 = 0.692$, $\theta_1 = 0.446$, $\theta_2 = 0.402$ y $\theta_3 = 0.494$, todos ellos estadísticamente significativos ($p < 0.001$).
+* Parte estacional: periodo $m = 4$ trimestres, con una diferenciación estacional $D = 1$ ($(1 - B^4)$) y sin retardos autorregresivos ni de media móvil estacional ($P = 0$, $Q = 0$).
 
-### Comparación de predicciones: ARIMA directo vs. STL + ARIMA
+### Proyección temporal a 8 trimestres: ARIMA frente a STL + ARIMA
 
 Comparamos la predicción directa del ARIMA con la obtenida combinando STL y ARIMA mediante `aedv_prediccion_stl_arima()`, técnica que modela con ARIMA únicamente la componente de tendencia de la descomposición STL y le suma el último patrón estacional repetido:
 
 ```{r predicciones-comparativa, fig.cap="Figura 9. Predicciones a 8 trimestres del tráfico aéreo en España: ARIMA directo frente a STL + ARIMA."}
 # Predicción combinando STL y ARIMA a 8 trimestres
-res_pred_stl <- aedv_prediccion_stl_arima(ts_espana, h = 8)
+res_pred_stl <- aedv_prediccion_stl_arima(ts_espana_limpia, h = 8)
 
 # Dibujamos ambas predicciones (mostrando desde 2016 para apreciar con claridad los intervalos)
 g_pred_arima <- aedv_dibujar_arima(
@@ -679,23 +698,21 @@ g_pred_arima
 g_pred_stl
 ```
 
-**Comentario:** Ambos modelos anticipan la continuación del crecimiento en 2025 y 2026, proyectando picos estivales (Q3) que superarán los 80 millones de pasajeros trimestrales en España (alcanzando 81.5 millones). La predicción combinada STL + ARIMA reproduce con exactitud la forma del último ciclo estacional sobre la tendencia Loess extrapolada, mientras que el ARIMA directo estima la estacionalidad de manera paramétrica. En ambos casos, las bandas de confianza al 95 % se ensanchan a medida que aumenta el horizonte temporal, reflejando la acumulación progresiva de incertidumbre.
+**Comentario:** Ambos modelos anticipan la continuación del crecimiento en 2025 y 2026, proyectando picos estivales (Q3) que superarán los 83-85 millones de pasajeros trimestrales en España (alcanzando 83.4 M en 2025 y 85.3 M en 2026 con STL + ARIMA). La predicción combinada STL + ARIMA reproduce con exactitud la forma del ciclo estacional sobre la tendencia Loess extrapolada, mientras que el ARIMA directo estima la trayectoria de manera paramétrica. En ambos casos, las bandas de confianza al 95 % se ensanchan a medida que aumenta el horizonte temporal, reflejando la acumulación progresiva de incertidumbre.
 
 ## Evaluación
 
 ### Diagnóstico de residuos de los modelos
 
-Para evaluar la validez estadística de los modelos ajustados en la fase anterior, analizamos si sus residuos cumplen las propiedades de ruido blanco (media cero, ausencia de autocorrelación, varianza constante y normalidad).
+Para evaluar la validez estadística de los modelos ajustados, analizamos si sus residuos cumplen las propiedades de ruido blanco (media cero, ausencia de autocorrelación, varianza constante y normalidad).
 
 #### Residuos del modelo ARIMA estacional
 
-Para el diagnóstico no hace falta volver a ajustar el modelo: en el tramo observado, la columna `prediccion` del resultado contiene el ajuste del modelo en cada trimestre, por lo que el residuo es el valor real menos ese ajuste (el mismo cálculo con el que `aedv_arima_accuracy()` obtiene sus métricas). Representamos gráficamente la evolución temporal del residuo con una línea horizontal de referencia en el cero y aplicamos la tabla oficial con los cuatro contrastes estadísticos del curso (`aedv_tests_residuos()` y `aedv_tabla_tests()`):
+Obtenemos los residuos directamente mediante la función oficial del curso `aedv_residuos()` incorporada en `utilidades.R`. Representamos gráficamente su evolución temporal con una línea horizontal de referencia en el cero y aplicamos la tabla oficial con los cuatro contrastes estadísticos del curso (`aedv_tests_residuos()` y `aedv_tabla_tests()`):
 
 ```{r diagnostico-residuos, fig.cap="Figura 10. Evolución temporal de los residuos del modelo ARIMA y contrastes estadísticos oficiales."}
-# Tramo observado: valor real menos ajuste del modelo
-residuos_arima <- res_pred_arima |>
-  filter(!is.na(pasajeros), !is.na(prediccion)) |>
-  mutate(residuo = pasajeros - prediccion)
+# Residuos oficiales del modelo ARIMA
+residuos_arima <- aedv_residuos(res_pred_arima)
 
 # Gráfico temporal del residuo con referencia en cero
 residuos_arima |>
@@ -705,7 +722,7 @@ residuos_arima |>
   scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = " M")) +
   labs(
     title = "Residuos del modelo ARIMA estacional",
-    subtitle = "Diferencia entre el valor real y el ajuste del modelo en el tramo observado",
+    subtitle = "Evolución temporal del residuo en el tramo observado",
     x = "",
     y = "Residuo (Millones de pasajeros)"
   ) +
@@ -719,7 +736,7 @@ aedv_tabla_tests(tests_arima, titulo = "Diagnóstico de residuos del modelo ARIM
 
 #### Remainder de la descomposición STL
 
-Comprobamos igualmente las propiedades estadísticas del componente residual (*remainder*) de la descomposición STL robusta obtenida en 3.6:
+Comprobamos igualmente las propiedades estadísticas del componente residual (*remainder*) de la descomposición STL robusta:
 
 ```{r tests-stl-evaluacion}
 tests_stl <- aedv_tests_residuos(comp_stl$remainder, comp_stl$fecha)
@@ -731,22 +748,20 @@ aedv_tabla_tests(tests_stl, titulo = "Diagnóstico del remainder de la descompos
 A partir de las tablas de contraste y los gráficos de diagnóstico, evaluamos los aspectos requeridos por la metodología y vistos en clase:
 
 1. **Comprobación de condiciones de ruido blanco:**
-   * **Media cero:** Ambos modelos superan el test $t$ de Student ($p = 0.524 > 0.05$ en ARIMA y $p = 0.155 > 0.05$ en STL). Los residuos oscilan alrededor de cero sin sesgos sistemáticos.
-   * **Ausencia de autocorrelación:** El modelo ARIMA supera con holgura el test de Ljung-Box ($p = 0.904 > 0.05$), confirmando que el modelo ha capturado con éxito toda la dinámica temporal y que no queda información residual aprovechable. En cambio, el *remainder* de STL retiene correlación ($p = 0.0125 < 0.05$) debido a que el ajuste Loess local no absorbe totalmente las oscilaciones abruptas.
-   * **Homocedasticidad (varianza constante):** Se supera el test de Breusch-Pagan en ambos modelos ($p = 0.169 > 0.05$ en ARIMA y $p = 0.244 > 0.05$ en STL), lo que indica que la dispersión de los errores se mantiene estable a lo largo del tiempo.
-   * **Normalidad:** El test de Shapiro-Wilk no se supera ($p < 0.001$) en ninguno de los dos casos. Como se observa en la serie temporal de residuos, este resultado se debe exclusivamente a las caídas excepcionales del confinamiento de 2020 (valores atípicos extremos negativos). En series temporales reales afectadas por shocks externos de esta magnitud, este comportamiento es habitual y no invalida la utilidad del modelo para pronosticar periodos ordinarios, si bien hace que los intervalos de confianza deban interpretarse con prudencia.
+   * **Media cero:** El modelo ARIMA supera el test $t$ de Student ($p = 0.278 > 0.05$), confirmando que los errores oscilan equilibradamente alrededor de cero sin sesgos sistemáticos.
+   * **Ausencia de autocorrelación:** El modelo ARIMA supera con amplia holgura el test de Ljung-Box ($p = 0.830 > 0.05$), lo que certifica que los residuos son incorrelados y que el modelo ha capturado con total eficacia la estructura temporal de la serie.
+   * **Normalidad:** Tras el tratamiento riguroso del periodo anómalo de la pandemia mediante interpolación, el test de Shapiro-Wilk resulta **plenamente superado** ($p = 0.721 > 0.05$). Al no existir ya valores atípicos extremos, la distribución de los errores es indistinguible de una distribución normal, lo que valida formalmente la fiabilidad de las bandas de predicción al 95 %.
+   * **Homocedasticidad (varianza constante):** El test de Breusch-Pagan se supera holgadamente en el ARIMA ($p = 0.528 > 0.05$), demostrando que la dispersión de los residuos permanece completamente homogénea a lo largo de todo el periodo analizado.
 
 2. **¿Hacía falta una transformación previa de los datos?**
-   En el análisis de series temporales suele considerarse aplicar una transformación matemática previa (como logaritmo o Box-Cox) cuando la varianza crece proporcionalmente al nivel de la serie. En nuestro caso, el test de Breusch-Pagan confirma varianza constante con un $p$-valor de $0.169 > 0.05$. Por tanto, no resulta necesaria una transformación logarítmica. Trabajar directamente con la serie en su escala original evita introducir sesgos al revertir transformaciones no lineales y permite interpretar los resultados directamente en millones de pasajeros.
+   En el análisis de series temporales suele considerarse aplicar una transformación matemática previa (como logaritmo o Box-Cox) cuando la varianza crece proporcionalmente al nivel de la serie. En nuestro caso, el test de Breusch-Pagan confirma varianza constante con un $p$-valor de $0.528 > 0.05$. Por tanto, no resulta necesaria una transformación logarítmica. Trabajar directamente con la serie en su escala original evita introducir sesgos al revertir transformaciones no lineales y permite interpretar los resultados directamente en millones de pasajeros.
 
 3. **¿En qué casos se usa STL + ARIMA en lugar de ARIMA solo y cómo se comparan?**
-   El método STL + ARIMA se utiliza cuando la serie presenta una estacionalidad muy estable y regular que puede aislarse adecuadamente mediante Loess, permitiendo que el ARIMA se concentre exclusivamente en predecir la tendencia suave sin necesidad de estimar parámetros estacionales adicionales. En cambio, cuando la amplitud o la forma de la estacionalidad evoluciona con el tiempo, el modelo ARIMA estacional resulta más flexible porque modela dinámicamente ambas componentes. En nuestro análisis de pasajeros aéreos en España, ambos métodos ofrecen pronósticos plenamente consistentes, proyectando la superación de los 80 millones de pasajeros en los veranos de 2025 y 2026.
+   El método STL + ARIMA se utiliza cuando la serie presenta una estacionalidad muy estable y regular que puede aislarse adecuadamente mediante Loess, permitiendo que el ARIMA se concentre exclusivamente en predecir la tendencia suave sin necesidad de estimar parámetros estacionales adicionales. En cambio, cuando la amplitud o la forma de la estacionalidad evoluciona con el tiempo, el modelo ARIMA estacional resulta más flexible porque modela dinámicamente ambas componentes. En nuestro análisis de pasajeros aéreos en España, ambos métodos ofrecen pronósticos plenamente consistentes, proyectando la superación de los 83-85 millones de pasajeros en los veranos de 2025 y 2026.
 
 ### Métricas de error del ajuste del modelo ARIMA
 
-> **Pregunta P5:** ¿Qué modelo ARIMA estacional se ajusta al tráfico aéreo de pasajeros en España y qué métricas de error de ajuste (`aedv_arima_accuracy`) obtiene? ¿Cumplen sus residuos las propiedades de ruido blanco en los contrastes estadísticos y qué diferencias se observan al contrastar su pronóstico a 8 trimestres con el método combinado STL+ARIMA?
-
-Calculamos las métricas oficiales de error del ajuste sobre el tramo observado mediante la función de la asignatura `aedv_arima_accuracy()`. Conviene destacar una distinción metodológica fundamental vista en el curso: las métricas de error de ajuste se calculan exclusivamente para el modelo ARIMA sobre los datos conocidos del pasado (tramo observado). La técnica STL + ARIMA solo sirve para proyectar la serie hacia el futuro sumando la tendencia extrapolada y el último ciclo estacional, por lo que no genera un ajuste histórico sobre los datos observados ni admite estas métricas en muestra. Asimismo, las métricas de predicción hacia el futuro basadas en validación cruzada temporal no forman parte del temario de clase y por tanto no se aplican en esta memoria.
+Calculamos las métricas oficiales de error del ajuste sobre el tramo observado mediante la función de la asignatura `aedv_arima_accuracy()`. Conviene recordar una distinción metodológica fundamental vista en el curso: las métricas de error de ajuste se calculan exclusivamente para el modelo ARIMA sobre los datos conocidos del pasado (tramo observado). La técnica STL + ARIMA solo sirve para proyectar la serie hacia el futuro sumando la tendencia extrapolada y el último ciclo estacional, por lo que no genera un ajuste histórico sobre los datos observados ni admite estas métricas en muestra. Asimismo, las métricas de predicción hacia el futuro basadas en validación cruzada temporal no forman parte del temario de clase y por tanto no se aplican en esta memoria.
 
 ```{r arima-accuracy}
 acc_arima <- aedv_arima_accuracy(res_pred_arima)
@@ -762,19 +777,9 @@ acc_arima |>
 ```
 
 **Comentario e interpretación de las métricas:**
-1. **RMSE (Root Mean Squared Error = 7.010.934 pasajeros):** Mide la raíz del error cuadrático medio. Al elevar al cuadrado las discrepancias, penaliza con mayor dureza los errores grandes, como los ocurridos durante los trimestres anómalos de 2020.
-2. **MAE (Mean Absolute Error = 2.942.563 pasajeros):** Indica que, en promedio, el ajuste trimestral del modelo se desvía en menos de 3 millones de pasajeros respecto a la cifra observada, lo que supone un error relativo muy moderado para una serie que supera los 60-70 millones de pasajeros en trimestres punta.
-3. **MASE (Mean Absolute Scaled Error = 0.390):** Es la métrica adimensional estándar del curso. Al ser notablemente inferior a 1 ($\text{MASE} = 0.390 \ll 1$), certifica que el modelo ARIMA estacional es un 61 % más preciso que el método trivial estacional (que predice cada trimestre repitiendo el valor del mismo trimestre del año anterior).
-
-### Respuestas a las preguntas de investigación
-
-A partir de los análisis, gráficos y tablas realizados, respondemos a las cinco preguntas de la memoria:
-
-* **Respuesta a P1 (Impacto de la COVID-19 y recuperación relativa):** En el segundo trimestre de 2020 el tráfico cayó entre un 96.7 % y un 98.5 % en todos los países analizados respecto a 2019 Q2 (España cayó un 98.5 %, pasando de 62.95 M a 926 mil pasajeros). La recuperación fue dispar: los países turísticos (España, Portugal, Grecia) superaron el nivel 100 de la Base 100 en 2022 y alcanzaron picos entre el 120 % y el 140 % en 2023-2024, mientras que Alemania y Francia se han mantenido entre el 90 % y el 95 % de su nivel pre-pandemia.
-* **Respuesta a P2 (Concentración del tráfico y cuota de España):** El tráfico presenta una fuerte concentración: 5 países (España, Alemania, Turquía, Italia y Francia) suman el 58.1 % del total continental en 2023. España lidera el ranking con 236.5 millones de pasajeros anuales, lo que representa un 15.0 % de todo el pasaje europeo.
-* **Respuesta a P3 (Distribución anual continental y posición de España):** La distribución anual entre países es fuertemente asimétrica hacia la derecha, con una mediana continental de 16.7 millones de pasajeros en 2023. España se sitúa en la parte más alta de la distribución como el valor más extremo del continente.
-* **Respuesta a P4 (Estacionalidad trimestral y descomposición STL):** El tráfico en España presenta un ciclo estival muy marcado: en verano (T3) la serie suma entre 12 y 16 millones de pasajeros por encima de la media anual, mientras que en invierno (T1) resta unos 10 millones. La tendencia Loess confirma la recuperación en "V" tras el valle de 2020.
-* **Respuesta a P5 (Modelos ARIMA estacionales, diagnóstico de residuos y precisión):** El tráfico en España se modela óptimamente mediante un $\text{ARIMA}(2,0,0)(2,1,0)[4]$, que logra un $\text{MASE} = 0.390$, superando con creces al método trivial estacional, con un MAE de 2.94 M y RMSE de 7.01 M. Sus residuos satisfacen las hipótesis de media cero ($p = 0.524$), ausencia de autocorrelación ($p = 0.904$) y homocedasticidad ($p = 0.169$), si bien no presentan normalidad ($p < 0.001$) debido a los valores atípicos del confinamiento de 2020. La predicción combinada STL + ARIMA valida las proyecciones del ARIMA directo, anticipando ambos modelos que los picos estivales superarán los 80 millones de pasajeros en 2025 y 2026.
+1. **RMSE (Root Mean Squared Error = 1.699.902 pasajeros):** La raíz del error cuadrático medio desciende hasta 1.70 millones de pasajeros. Al haberse tratado el periodo COVID-19, la penalización cuadrática ya no se ve artificialmente inflada por los trimestres de confinamiento.
+2. **MAE (Mean Absolute Error = 1.327.080 pasajeros):** El error absoluto medio indica que el ajuste trimestral del modelo se desvía, en promedio, en apenas 1.33 millones de pasajeros respecto a la cifra observada, lo que supone un error relativo de apenas un 2-3 % en una serie que supera los 60-70 millones estivales.
+3. **MASE (Mean Absolute Scaled Error = 0.359):** Al ser sustancialmente inferior a 1 ($\text{MASE} = 0.359 \ll 1$), certifica que el modelo ARIMA estacional es un 64 % más preciso que el método trivial estacional de referencia.
 
 ## Despliegue
 
@@ -782,14 +787,24 @@ La fase de despliegue de la metodología CRISP-DM se completará en la **Entrega
 
 # Conclusiones y trabajo futuro
 
+## Respuestas a las preguntas de investigación
+
+A partir de los análisis exploratorios, gráficos y modelos realizados, se da respuesta a las cinco preguntas de investigación iniciales del proyecto:
+
+* **Respuesta a P1 (Impacto de la pandemia y ritmo de recuperación relativa):** En el segundo trimestre de 2020 el tráfico colapsó entre un 96.7 % y un 98.5 % en todos los países europeos respecto al mismo periodo de 2019 (España cayó un 98.5 %, pasando de 62.95 M a apenas 926 mil pasajeros). La recuperación fue dispar: los países turísticos del sur (España, Portugal, Grecia) superaron el nivel 100 de la Base 100 ya en 2022 y alcanzaron picos entre el 120 % y el 140 % en 2023-2024, mientras que mercados del centro de Europa como Alemania o Francia se han mantenido entre el 90 % y el 95 % de su nivel previo a la crisis sanitaria.
+* **Respuesta a P2 (Concentración del tráfico y cuota de España):** El tráfico presenta una fortísima concentración geográfica: aplicando el corte de Pareto al 75 %, únicamente 5 países (España, Alemania, Turquía, Italia y Francia) suman el 58.1 % del total continental en 2023. España encabeza el ranking continental absoluto con 236.5 millones de pasajeros anuales (15.0 % de toda Europa). Al analizar las cifras per cápita para hacer comparaciones justas, España alcanza 4.92 pasajeros por habitante, superando holgadamente a grandes economías como Alemania (2.23), Francia (2.35) o Italia (2.77).
+* **Respuesta a P3 (Distribución anual continental y posición de España):** La distribución anual entre los 36 países europeos es marcadamente asimétrica hacia la derecha, con una mediana continental de 16.7 millones de pasajeros en 2023. España se sitúa año tras año en el extremo superior de la distribución como el valor más alto del continente, alejándose con claridad del cuerpo central de la distribución europea.
+* **Respuesta a P4 (Estacionalidad trimestral y comportamiento de la tendencia):** El transporte de pasajeros en España sigue un patrón estacional estival de enorme intensidad: en verano (T3) la serie suma sistemáticamente entre 12 y 16 millones de pasajeros por encima de la media anual, mientras que en invierno (T1) resta unos 10 millones. La tendencia Loess confirma un crecimiento continuado y sostenido tras la pandemia, marcando en 2023 y 2024 récords absolutos históricos.
+* **Respuesta a P5 (Modelo ARIMA, diagnóstico de residuos y predicciones):** Tras tratar el periodo anómalo de la pandemia mediante interpolación, el tráfico aéreo en España se modela con un $\text{ARIMA}(1,0,3)(0,1,0)[4]$, que alcanza una precisión excelente ($\text{MASE} = 0.359$, $\text{MAE} = 1.33\text{ M}$, $\text{RMSE} = 1.70\text{ M}$). Sus residuos satisfacen plenamente las cuatro hipótesis de ruido blanco: media cero ($p = 0.278$), ausencia de autocorrelación ($p = 0.830$), normalidad ($p = 0.721$) y varianza constante ($p = 0.528$). Las proyecciones a 8 trimestres con ARIMA directo y con STL + ARIMA son plenamente coherentes y anticipan que los máximos estivales superarán los 83-85 millones de pasajeros en los veranos de 2025 y 2026.
+
 ## Conclusiones
 
-El análisis realizado sobre el dataset `avia_paoc` de Eurostat permite extraer las siguientes conclusiones principales:
+El análisis realizado sobre el dataset `avia_paoc` de Eurostat y su cruce con datos demográficos permite extraer las siguientes conclusiones principales:
 
-1. **Concentración del tráfico aéreo:** El mercado europeo está fuertemente concentrado en unos pocos países según el Principio de Pareto. España lidera el volumen continental con 236.5 millones de pasajeros en 2023 (15.0 % del total).
-2. **Dos ritmos de recuperación post-pandemia:** La normalización a Base 100 muestra que los países con fuerte dependencia del turismo de ocio (España, Portugal, Grecia) se reactivaron con gran rapidez y marcaron récords históricos en 2023-2024, mientras que países con mayor peso de viajes de negocios o sustitución por ferrocarril (Alemania, Francia) no han recuperado todavía el nivel de 2019.
-3. **Marcada estacionalidad veraniega:** Tanto el mapa de calor como la descomposición STL confirman que el tercer trimestre inyecta una masa extraordinaria de pasajeros (+14 millones en España), lo que exige una adecuada planificación estacional de personal e infraestructuras aeroportuarias.
-4. **Capacidad predictiva y ajuste del modelo:** El modelo ARIMA directo captura la dinámica de la serie de forma fiable, dejando residuos sin autocorrelación ($p = 0.904$), varianza constante ($p = 0.169$) y con media cero ($p = 0.524$). El error de ajuste obtenido con las funciones del curso (`aedv_arima_accuracy`) confirma una gran precisión ($\text{MASE} = 0.390 \ll 1$), batiendo con holgura al método trivial estacional y alineándose con las proyecciones de STL+ARIMA al anticipar veranos con más de 80 millones de pasajeros en 2025 y 2026.
+1. **Intensidad y liderazgo del transporte aéreo en España:** En volumen global España encabeza el continente (236.5 millones de pasajeros en 2023, 15.0 % europeo). Al calcular las métricas per cápita requeridas en el estudio, España registra 4.92 pasajeros anuales por habitante, más del doble que potencias comunitarias como Alemania o Francia, lo que refleja la doble dimensión del sector: motor de una industria turística de alcance mundial y vía imprescindible de conectividad territorial con los archipiélagos canario y balear.
+2. **Dos velocidades de salida de la crisis sanitaria:** El análisis en Base 100 demuestra que los destinos mediterráneos con alta dependencia del turismo vacacional se reactivaron con excepcional dinamismo, batiendo sus registros previos en 2023-2024, mientras que economías con mayor peso de viajes corporativos han experimentado una recuperación más lenta.
+3. **Estacionalidad y gestión de capacidad:** Tanto los mapas de calor como la descomposición STL demuestran que el tercer trimestre genera una presión logística extraordinaria (+14 millones de pasajeros en España), lo que subraya la necesidad de una rigurosa planificación operativa estacional.
+4. **Calidad y validez estadística del modelo predictivo:** Una vez corregido el parón de 2020-2021 mediante interpolación regular como enseña la metodología de la asignatura, el modelo ARIMA estacional no solo reduce a mínimos sus errores de ajuste ($\text{MASE} = 0.359$), sino que supera los cuatro contrastes estadísticos formales (incluyendo la normalidad de Shapiro-Wilk con $p = 0.721$). Tanto el ARIMA directo como la descomposición STL + ARIMA proyectan una pauta de crecimiento continuado que llevará los picos estivales de España por encima de los 85 millones de pasajeros en 2026.
 
 ## Trabajo futuro
 
